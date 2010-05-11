@@ -146,14 +146,6 @@ int main(int argc, char** argv) {
 void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P)
 {
 	//Interface host call to the device kernel code and invoke the kernel
-	/*	
-	Matrix Md = AllocateDeviceMatrix(M);
-	CopyToDeviceMatrix(Md, M);
-	Matrix Nd = AllocateDeviceMatrix(N);
-	CopyToDeviceMatrix(Nd, N);
-	
-	Matrix Pd = AllocateDeviceMatrix(P);
-	*/
 	float* Md;
 	float* Nd;
 	float* Pd;
@@ -172,7 +164,6 @@ void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P)
 	
 	MatrixMulKernel<<<dimGrid, dimBlock>>>(Md, Nd, Pd, width);
 	
-	//CopyFromDeviceMatrix(P, Pd);
 	cudaMemcpy(P.elements, Pd, size, cudaMemcpyDeviceToHost);
 
 	cudaFree(&Md);
