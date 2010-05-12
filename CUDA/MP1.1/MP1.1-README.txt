@@ -1,7 +1,7 @@
-ECE 498 AL1 Machine Problem 1.1
+ECE 498 AL Machine Problem 1.1
 Matrix Multiplication
 
-1)  Unzip mp1.1-matrixmul.tgz into your sdk/projects directory
+1)  Unzip /home/ac/stratton/498_admin/mps/mp1.1-matrixmul.tgz into your sdk/projects directory
 
 2)  Edit the MatrixMulOnDevice( ... ) function in matrixmul.cu and the
     MatrixMulKernel( ... ) function in matrixmul_kernel.cu to complete the
