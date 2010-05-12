@@ -46,9 +46,16 @@
 // **===------------------------------------------------------------------===**
 __global__ void reduction(float *g_data, int n)
 {
-
-
-
+	// Performs reduction addition in log2(num_elements/2)+1 syncs
+	int k = 1;
+	int id = threadIdx.x;
+	while(k <= n)
+	{
+		if(id < n/k)
+			g_data[k*id*2] = g_data[k*id*2] + g_data[k*(id*2+1)];
+		syncthreads();
+		k = k*2;
+	}
 }
 
 #endif // #ifndef _SCAN_NAIVE_KERNEL_H_

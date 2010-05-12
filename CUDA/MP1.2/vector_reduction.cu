@@ -148,9 +148,18 @@ int ReadFile(float* M, char* file_name)
 // Note: float* h_data is both the input and the output of this function.
 float computeOnDevice(float* h_data, int num_elements)
 {
+	float* d_data;
+	size_t size = num_elements*sizeof(float);
 
-  // placeholder
-  return 0.0f;
+	cudaMalloc((void**)&d_data, size);
+	cudaMemcpy(d_data, h_data, size, cudaMemcpyHostToDevice);
 
-}
-     
+	dim3 dimGrid(1,1);
+	dim3 dimBlock(num_elements/2);
+	reduction<<<dimGrid, dimBlock>>>(d_data, num_elements);
+
+	cudaMemcpy(h_data, d_data, size, cudaMemcpyDeviceToHost);	
+	cudaFree(&d_data);
+
+	return *h_data;
+}     
