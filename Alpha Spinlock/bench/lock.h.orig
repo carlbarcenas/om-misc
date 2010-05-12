@@ -1,0 +1,69 @@
+/*=============================================================================
+#
+# Author: Zhengyu He (zhengyu.he@gatech.edu)
+# School of Electrical & Computer Engineering
+# Georgia Institute of Technology
+#
+# Last modified: 2010-03-03 15:21
+#
+# Filename: lock.h
+#
+# Description: 
+#
+=============================================================================*/
+#include <pthread.h>
+#include <stdlib.h>
+#include "size.h"
+
+
+#define INIT		init(); 
+#define LOCK 		my_spin_lock(&mutex);
+#define UNLOCK 		my_spin_unlock(&mutex);
+
+
+extern long *array;
+extern int num_threads;
+
+volatile int mutex;
+
+int init()
+{
+	mutex = 0;
+	return 0;
+}
+
+
+int my_spin_unlock (volatile int *lock)
+{
+  //Need full memory barrier here or just wmb?
+  //W->W
+  //R->W
+  //W->R can all be reordered
+  asm volatile ("mb");
+  return *lock = 0;
+}
+
+int my_spin_lock (volatile int *lock)
+{
+  unsigned int tmp;
+  //ldl_l is load linked
+  //stl_c is store conditional
+  //Runs on bus based 16 processor MESI system (no directory)
+  //Exponential backoff
+  asm volatile
+    ("1:        ldl_l   %0,%1\n"
+     "          blbs    %0,2f\n"
+     "          or      %0,1,%0\n"
+     "          stl_c   %0,%1\n"
+     "          beq     %0,2f\n"
+     "          mb\n"
+     ".subsection 2\n"
+     "2:        ldl     %0,%1\n"
+     "          blbs    %0,2b\n"
+     "          br      1b\n"
+     ".previous"
+     : "=r" (tmp), "=m" (*lock)
+     : "m" (*lock));
+  return 0;
+}
+

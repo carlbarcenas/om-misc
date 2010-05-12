@@ -1,0 +1,2 @@
+#define ARRAY_SIZE 2048
+#define ITERATION  32

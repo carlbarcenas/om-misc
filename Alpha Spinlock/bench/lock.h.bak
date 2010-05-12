@@ -1,0 +1,215 @@
+/*=============================================================================
+#
+# Author: Zhengyu He (zhengyu.he@gatech.edu)
+# School of Electrical & Computer Engineering
+# Georgia Institute of Technology
+#
+# Last modified: 2010-03-03 15:21
+#
+# Filename: lock.h
+#
+# Description: 
+#
+=============================================================================*/
+#include <pthread.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include "size.h"
+
+
+#define INIT		init(); 
+#define LOCK 		unsigned int mine = my_spin_lock(&mutex);
+#define UNLOCK 		my_spin_unlock(&mutex, mine);
+
+
+extern long *array;
+extern int num_threads;
+
+volatile struct _mutex {
+  // Maybe make this int slots[16][64] so they are on different cache lines?
+  int slots[16][16];
+  int next;
+} mutex;
+
+int init()
+{
+  int i;
+  for(i = 1; i < 16; i++) mutex.slots[i][0] = 0;
+  mutex.slots[0][0] = 1;
+  mutex.next = 0;
+  return 0;
+}
+
+
+int my_spin_unlock (volatile struct _mutex *lock, unsigned int mine)
+{
+  //Need full memory barrier here or just wmb?
+  //W->W
+  //R->W
+  //W->R can all be reordered
+  // Modulo not part of ISA so x % 16 == (x << 60) >> 60 == x & 15
+  //asm volatile ("wmb");
+  unsigned int tmp, tmp2;
+  //printf("R:Mine: %i\n", mine);
+  //printf("R:test: %p\n", (&(lock->slots[0][0])+(mine)*16*4));
+  //printf("R:test: %i\n", *(&(lock->slots[0][0])+(mine)*16*4));
+  //printf("R:My slot: %i\n", lock->slots[mine][0]);
+  // mine = mine + 1
+  // mine = mine & 15 (%16)
+  // tmp = &base
+  // tmp2 = mine << 4 (mine*16)
+  // tmp = tmp2*4 + tmp (mine*16*4 + &base)
+  // tmp2 = 0 + 1
+  // [tmp] = tmp2
+  /* "3:  and    %[mine],15,%[mine]\n"    
+     "4:  lda    %[tmp],%[base]\n"
+     "    sll    %[mine],4,%[tmp2]\n"
+     "    s4addq %[tmp2],%[tmp],%[tmp]\n"
+     "5:  ldl    %[tmp2],0(%[tmp])\n"*/
+  asm volatile
+    ("addl   %[mine],1,%[mine]\n"
+     "and    %[mine],15,%[mine]\n"
+     "lda    %[tmp],%[base]\n"
+     "sll    %[mine],4,%[tmp2]\n"
+     "s4addq %[tmp2],%[tmp],%[tmp]\n"
+     "addl   $31,1,%[tmp2]\n"
+     "stl    %[tmp2],0(%[tmp])\n"
+     : [mine] "=r" (mine), [base] "=m" (lock->slots[0][0]), [tmp] "=r" (tmp), [tmp2] "=r" (tmp2)
+     : "m" (lock->slots[0][0]), "0" (mine));
+  //printf("Out\n");
+  //printf("R:Next slot: %i\n", lock->slots[mine][0]);
+  //printf("R:Next addr: %x\n", tmp);
+  //printf("R:Next real: %p\n", &(lock->slots[mine][0]));
+  //printf("R:Mine after: %i\n", mine);
+  return 0;
+}
+  
+int my_spin_lock (volatile struct _mutex *lock)
+{
+  //ldl_l is load linked
+  //stl_c is store conditional
+  //Runs on bus based 16 processor MESI system (no directory)
+  // LDL_L = Load Sign-Extended Longword Locked (Longword == int/4 bytes)
+  // BLBS  = Branch if Register Low Bit Is Set
+  // OR    = Logical Or
+  // STL_C = Store Longword from Register to Memory Conditional
+  // BEQ   = Branch if Register Equal to Zero
+  //
+  // For array access. Index = Index + Index twice (for 4 byte arrays) then use
+  // offset
+  //
+  //ORIGINAL SPINLOCK ALGO
+  // 1: ll lock->tmp
+  //    goto 2 if tmp = 1 (lock taken)
+  //    set last bit to 1
+  //    sc tmp->lock
+  //    goto 2 if tmp = 0 (sc failed)
+  //    memory barrier
+  //    return
+  //
+  // 2: load lock->tmp
+  //    goto 2 if tmp = 1 (lock still taken)
+  //    goto 1
+  //    
+  /* asm volatile
+    ("1:        ldl_l   %0,%1\n"
+     "          blbs    %0,2f\n"
+     "          or      %0,1,%0\n"
+     "          stl_c   %0,%1\n"
+     "          beq     %0,2f\n"
+     "          mb\n"
+     ".subsection 2\n"
+     "2:        ldl     %0,%1\n"
+     "          blbs    %0,2b\n"
+     "          br      1b\n"
+     ".previous"
+     : "=r" (tmp), "=m" (*lock)
+     : "m" (*lock));*/
+
+  // Fetch-And-Add
+  // 1: ll counter->tmp
+  //    result = tmp + i
+  //    tmp = tmp + i
+  //    sc tmp->counter
+  //    goto 2 if tmp = 0 (sc failed)
+  //    return
+  //
+  // 2: goto 1
+  /*static inline int atomic_add_return(int i, atomic_t *v)
+    {
+      long temp, result;
+      smp_mb();
+      __asm__ __volatile__(
+         "1: ldl_l %0,%1\n"
+         " addl %0,%3,%2\n"
+         " addl %0,%3,%0\n"
+         " stl_c %0,%1\n"
+         " beq %0,2f\n"
+         ".subsection 2\n"
+         "2: br 1b\n"
+         ".previous"
+         :"=&r" (temp), "=m" (v->counter), "=&r" (result)
+         :"Ir" (i), "m" (v->counter) : "memory");
+         smp_mb();
+       return result;
+    }*/
+
+  unsigned int mine, tmp, tmp2;
+  // 1: ll lock.next->mine
+  //    tmp = mine + 1
+  //    sc tmp->lock.next
+  //    goto 2 if failed
+  //    tmp = 1 if (mine < 16)
+  //    if tmp != 0 goto 3
+  // 2: ll lock.next->tmp
+  //    tmp = tmp - 16
+  //    sc tmp->lock.next
+  //    goto 4 if failed
+  // 3: discard all but first 4 bits of mine 
+  // 4: tmp = &lock->slots
+  //    tmp2 = mine*16
+  //    tmp = tmp2*4 + tmp
+  // 5: tmp2 = {tmp}
+  //    if tmp2 == 0 goto 6
+  //    store 0->(lock->slots[mine])
+  // 6: goto 5
+  // 7: goto 2
+  // 8: goto 1
+  //printf("A:Lock->next before: %i\n", lock->next);
+  asm volatile
+    ("1:  ldl_l  %[mine],%[next]\n"
+     "    addl   %[mine],1,%[tmp]\n"
+     "    stl_c  %[tmp],%[next]\n"
+     "    beq    %[tmp],8f\n"
+     "    cmpult %[mine],16,%[tmp]\n"
+     "    bne    %[tmp],3f\n"
+     "2:  ldl_l  %[tmp],%[next]\n"
+     "    subl   %[tmp],16,%[tmp]\n"
+     "    stl_c  %[tmp],%[next]\n"
+     "    beq    %[tmp],7f\n"
+     "3:  and    %[mine],15,%[mine]\n"    
+     "4:  lda    %[tmp],%[base]\n"
+     "    sll    %[mine],4,%[tmp2]\n"
+     "    s4addq %[tmp2],%[tmp],%[tmp]\n"
+     "5:  ldl    %[tmp2],0(%[tmp])\n"
+     "    beq    %[tmp2],6f\n"
+     "    stl    $31,0(%[tmp])\n"
+     ".subsection 6\n"
+     "6:  br 5b\n"
+     ".previous\n"
+     ".subsection 7\n"
+     "7:  br 2b\n"
+     ".previous\n"
+     ".subsection 8\n"
+     "8:  br 1b\n"
+     ".previous"
+     : [mine] "=r" (mine), [next] "=m" (lock->next), [base] "=m" (lock->slots[0][0]), [tmp] "=r" (tmp), [tmp2] "=r" (tmp2)
+     : "m" (lock->next), "m" (lock->slots[0][0]));
+  //printf("A:Lock->next after: %i\n", lock->next);
+  //printf("A:Mine: %i\n", mine);
+  //printf("A:Lock->mine: %i\n", lock->slots[mine][0]);
+  //printf("A:Lock->mine+1: %i\n", lock->slots[mine+1][0]);
+  //printf("tmp:  0x%x\n", tmp);
+  //printf("add:  %p\n", &(lock->slots[0]));
+  return mine;
+}

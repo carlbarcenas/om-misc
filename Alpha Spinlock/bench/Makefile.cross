@@ -1,0 +1,18 @@
+# you sure you know which is your cross-compiler, right?
+
+CC =../crosstool/alphaev67-unknown-linux-gnu/bin/alphaev67-unknown-linux-gnu-gcc
+
+FLAG = -O0 -Wall -pthread  -static
+
+all:bench
+
+bench: bench.o  
+	$(CC) $(FLAG) $^ -o $@ 
+
+bench.o: bench.c
+	$(CC) $(FLAG) -c $< -o $@
+
+
+
+clean:
+	rm *.o bench  -rf
