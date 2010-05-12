@@ -52,17 +52,12 @@ void * aligned_malloc(size_t bytes, size_t alignment)
 	   which we skip to the next). */ 
 	void * malloc_original = malloc(bytes+alignment+sizeof(void*));
 
-	/* I had to cast malloc_original to an int here because of this error
-	       "Desktop/test.c:27: error: invalid operands to binary %"
-	   I'm not sure if this is going to be a safe cast depending on the
-	   memory location and the size of int on the target system but it 
-	   doesn't generate a warning so I'm assuming it's safe. This will
-	   return the original malloc pointer plus the difference between
-	   the original pointer and the first alignment boundary. */
+	/* This will return the original malloc pointer plus the difference
+	   between the original pointer and the first alignment boundary. */
 	size_t offset = alignment - ((size_t)malloc_original)%alignment;
 
-	/* A little bit of inelegant handling of corner cases. This should
-	   guarantee that we have space for our header regardless of how close
+	/* A little bit of handling of corner cases. This should guarantee 
+	   that we have space for our header regardless of how close
 	   to the boundary we were. If there isn't going to be room for our
 	   header we skip to the next alignment boundary. */
 	if(offset < sizeof(void*))
@@ -73,11 +68,8 @@ void * aligned_malloc(size_t bytes, size_t alignment)
 
 	/* Here I start getting tricky with pointers to do what I want. What
 	   this line does is go up from the aligned_malloc pointer by one 
-	   sizeof(void*) and stores the original malloc pointer. Since I had to
-	   assume that the (int) cast on the void pointer was safe previously
-	   I do so again here. C doesn't let you do pointer arithmetic directly
-	   on the void pointer it seems. Probably due to it not knowing how big
-	   of a memory increment 1 is supposed to be in that situation.*/
+	   sizeof(void*) and stores the original malloc pointer. GCC doesn't let
+	   you do pointer arithmetic directly on the void pointero we cast it. */
 	*(void **)((size_t)malloc_new-sizeof(void*)) = malloc_original;
 
 	/* Just a little testing. The aligned version should be a higher memory
