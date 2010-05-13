@@ -57,7 +57,7 @@ __global__ void reduction(float *g_data, int n)
 	for(int k = 2; k <= n; k = k*2)
 	{
 		__syncthreads();
-		if(id < n/k)
+		if(id < n/(k*2))
 			s_data[k*id*2] = s_data[k*id*2] + s_data[k*(id*2+1)];
 	}
 	if(id == 0)
