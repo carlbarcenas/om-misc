@@ -38,7 +38,6 @@
 
 #define NUM_ELEMENTS 512
 
-
 // **===----------------- MP3 - Modify this function ---------------------===**
 //! @param g_idata  input data in global memory
 //                  result is expected in index 0 of g_idata
@@ -47,21 +46,19 @@
 __global__ void reduction(float *g_data, int n)
 {
 	// Performs reduction addition in log2(num_elements/2)+1 syncs
-	int k = 2;
 	int id = threadIdx.x;
 
 	// Load array into local shared memory, each thread responsible for two
 	// values it computes first, perform first level of reduction while we're
 	// here
-	extern __shared__ float* s_data;
+	__shared__ float s_data[NUM_ELEMENTS];
 	s_data[id*2] = g_data[id*2] + g_data[id*2+1];
 
-	while(k <= n)
+	for(int k = 2; k <= n; k = k*2)
 	{
 		__syncthreads();
 		if(id < n/k)
 			s_data[k*id*2] = s_data[k*id*2] + s_data[k*(id*2+1)];
-		k = k*2;
 	}
 	if(id == 0)
 		g_data[0] = s_data[0];
