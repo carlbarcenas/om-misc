@@ -66,7 +66,6 @@ void FreeMatrix(Matrix* M);
 
 void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P);
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // Program main
 ////////////////////////////////////////////////////////////////////////////////
@@ -145,27 +144,40 @@ int main(int argc, char** argv) {
 ////////////////////////////////////////////////////////////////////////////////
 void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P)
 {
+	int tile_w = 16;
+	int tile_h = 16;
+	size_t Msize = M.width * M.height * sizeof(float);
+	size_t Nsize = N.width * N.height * sizeof(float);
+	size_t Psize = P.width * P.height * sizeof(float);
+
     // Load M and N to the device
-    Matrix Md = AllocateDeviceMatrix(M);
-    CopyToDeviceMatrix(Md, M);
-    Matrix Nd = AllocateDeviceMatrix(N);
-    CopyToDeviceMatrix(Nd, N);
+	float* Md;
+	float* Nd;
+	cudaMalloc(&Md, Msize);
+	cudaMalloc(&Nd, Nsize);
+	cudaMemcpy(Md, M.elements, Msize, cudaMemcpyHostToDevice);
+	cudaMemcpy(Nd, N.elements, Nsize, cudaMemcpyHostToDevice);
 
     // Allocate P on the device
-    Matrix Pd = AllocateDeviceMatrix(P);
-    CopyToDeviceMatrix(Pd, P); // Clear memory
+	float* Pd;
+	cudaMalloc(&Pd, Psize);
+	// Writing 0s into device memory, possibly removable
+	cudaMemcpy(Pd, P.elements, Psize, cudaMemcpyHostToDevice);
 
 	// Setup the execution configuration
+	dim3 dimGrid(1,1);
+	dim3 dimBlock(P.width, P.height);
  
     // Launch the device computation threads!
+	MatrixMulKernel<<<dimGrid, dimBlock>>>(Md, Nd, Pd, tile_w, tile_h);
 
     // Read P from the device
-    CopyFromDeviceMatrix(P, Pd); 
+	cudaMemcpy(P.elements, Pd, Psize, cudaMemcpyDeviceToHost);
 
     // Free device matrices
-    FreeDeviceMatrix(&Md);
-    FreeDeviceMatrix(&Nd);
-    FreeDeviceMatrix(&Pd);
+    cudaFree(&Md);
+    cudaFree(&Nd);
+    cudaFree(&Pd);
 }
 
 // Allocate a device matrix of same size as M.

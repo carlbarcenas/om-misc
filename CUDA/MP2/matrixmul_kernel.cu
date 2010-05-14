@@ -49,10 +49,21 @@
 //! @param g_odata  output data in global memory
 ////////////////////////////////////////////////////////////////////////////////
 // Matrix multiplication kernel thread specification
-__global__ void MatrixMulKernel(Matrix M, Matrix N, Matrix P)
+__global__ void MatrixMulKernel(float* M, float* N, float* P, int tile_w, int tile_h)
 {
+	__shared__ float Mds[tile_w][tile_h];
+	__shared__ float Nds[tile_w][tile_h];
 
+	int bx = blockIdx.x;
+	int by = blockIdx.y;
+	int tx = threadIdx.x;
+	int	ty = threadIdx.y;
+	int row = by * tile_h + ty;
+	int col = bx * tile_w + tx;
 
+	float Pvalue = 0.0;
+
+	// Help load M and N tiles into shared memory
 }
 
 #endif // #ifndef _MATRIXMUL_KERNEL_H_

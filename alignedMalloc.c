@@ -69,7 +69,7 @@ void * aligned_malloc(size_t bytes, size_t alignment)
 	/* Here I start getting tricky with pointers to do what I want. What
 	   this line does is go up from the aligned_malloc pointer by one 
 	   sizeof(void*) and stores the original malloc pointer. GCC doesn't let
-	   you do pointer arithmetic directly on the void pointero we cast it. */
+	   you do pointer arithmetic directly on the void pointer so we cast it. */
 	*(void **)((size_t)malloc_new-sizeof(void*)) = malloc_original;
 
 	/* Just a little testing. The aligned version should be a higher memory
