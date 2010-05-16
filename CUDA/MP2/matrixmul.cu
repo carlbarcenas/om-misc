@@ -144,8 +144,6 @@ int main(int argc, char** argv) {
 ////////////////////////////////////////////////////////////////////////////////
 void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P)
 {
-	int tile_w = 16;
-	int tile_h = 16;
 	size_t Msize = M.width * M.height * sizeof(float);
 	size_t Nsize = N.width * N.height * sizeof(float);
 	size_t Psize = P.width * P.height * sizeof(float);
@@ -165,11 +163,11 @@ void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P)
 	cudaMemcpy(Pd, P.elements, Psize, cudaMemcpyHostToDevice);
 
 	// Setup the execution configuration
-	dim3 dimGrid(1,1);
-	dim3 dimBlock(P.width, P.height);
+	dim3 dimGrid(P.width/TILE, P.height/TILE);
+	dim3 dimBlock(TILE, TILE);
  
     // Launch the device computation threads!
-	MatrixMulKernel<<<dimGrid, dimBlock>>>(Md, Nd, Pd, tile_w, tile_h);
+	MatrixMulKernel<<<dimGrid, dimBlock>>>(Md, Nd, Pd, M.height, M.width, N.width);
 
     // Read P from the device
 	cudaMemcpy(P.elements, Pd, Psize, cudaMemcpyDeviceToHost);

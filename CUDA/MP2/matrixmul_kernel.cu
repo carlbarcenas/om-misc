@@ -43,27 +43,64 @@
 #include <stdio.h>
 #include "matrixmul.h"
 
+#define TILE 16
+
 ////////////////////////////////////////////////////////////////////////////////
 //! Simple test kernel for device functionality
 //! @param g_idata  input data in global memory
 //! @param g_odata  output data in global memory
 ////////////////////////////////////////////////////////////////////////////////
 // Matrix multiplication kernel thread specification
-__global__ void MatrixMulKernel(float* M, float* N, float* P, int tile_w, int tile_h)
+__global__ void MatrixMulKernel(float* M, float* N, float* P, int M_h, int M_w, int N_w)
 {
-	__shared__ float Mds[tile_w][tile_h];
-	__shared__ float Nds[tile_w][tile_h];
+	int N_h = M_w;
+	//int P_h = M_h;
+	int P_w = N_w;
+	 
+	__shared__ float Mds[TILE][TILE];
+	__shared__ float Nds[TILE][TILE];
 
 	int bx = blockIdx.x;
 	int by = blockIdx.y;
 	int tx = threadIdx.x;
 	int	ty = threadIdx.y;
-	int row = by * tile_h + ty;
-	int col = bx * tile_w + tx;
+	int row = by*TILE + ty;
+	int col = bx*TILE + tx;
 
 	float Pvalue = 0.0;
-
-	// Help load M and N tiles into shared memory
+	
+	// For each tile
+	int i;
+	for(i = 0; i < M_w; i += TILE)
+	{
+		// Help load M and N tiles into shared memory
+		Mds[ty][tx] = M[row*M_w + (i+tx)];
+		Nds[ty][tx] = N[(i+ty)*N_w + col];
+		// Ensure that every element is loaded
+		__syncthreads();
+		// Calculate this threads value
+		for(int k = 0; k < TILE; ++k)
+			Pvalue += Mds[ty][k]*Nds[k][tx];
+		// Sync here to make sure that everyone is done using Mds and Nds
+		__syncthreads();
+	}
+	
+	// We still have to clean up the edges if the matrix isn't aligned to tile size
+	i = i - TILE;
+	if(row*M_w + (i+tx) < M_h*M_w)
+		Mds[ty][tx] = M[row*M_w + (i+tx)];
+	else
+		Mds[ty][tx] = 0.0;
+	if((i+ty)*N_w + col < N_h*N_w)
+		Nds[ty][tx] = N[(i+ty)*N_w + col];
+	else
+		Nds[ty][tx] = 0.0;
+	__syncthreads();
+	for(int k = 0; k < TILE; ++k)
+		Pvalue += Mds[ty][k]*Nds[k][tx];
+		
+	// Copy the element we calculated back 
+	P[row*P_w + col] = Pvalue;
 }
 
 #endif // #ifndef _MATRIXMUL_KERNEL_H_
