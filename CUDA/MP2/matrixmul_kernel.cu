@@ -43,7 +43,8 @@
 #include <stdio.h>
 #include "matrixmul.h"
 
-#define TILE 16
+// Tile size has to be less than sqrt(512) == 23 since we can only have 512 threads in a block
+#define TILE 8
 
 ////////////////////////////////////////////////////////////////////////////////
 //! Simple test kernel for device functionality
@@ -63,7 +64,7 @@ __global__ void MatrixMulKernel(float* M, float* N, float* P, int M_h, int M_w, 
 	int bx = blockIdx.x;
 	int by = blockIdx.y;
 	int tx = threadIdx.x;
-	int	ty = threadIdx.y;
+	int ty = threadIdx.y;
 	int row = by*TILE + ty;
 	int col = bx*TILE + tx;
 
@@ -85,20 +86,27 @@ __global__ void MatrixMulKernel(float* M, float* N, float* P, int M_h, int M_w, 
 		__syncthreads();
 	}
 	
-	// We still have to clean up the edges if the matrix isn't aligned to tile size
-	if(row*M_w + (i+tx) < M_h*M_w)
-		Mds[ty][tx] = M[row*M_w + (i+tx)];
+	// We still have to clean up the edges in case the matrix isn't aligned to tile size
+	// Load in the value from M into the tile (or 0 if we are outside the matrix bounds)
+	int index = row*M_w + (i+tx);
+	if(index < M_h*M_w)
+		Mds[ty][tx] = M[index];
 	else
 		Mds[ty][tx] = 0.0;
-	if((i+ty)*N_w + col < N_h*N_w)
-		Nds[ty][tx] = N[(i+ty)*N_w + col];
+
+	// Load in the value from N into the tile (or 0 if we are outside the matrix bounds)
+	index = (i+ty)*N_w + col;
+	if(index < N_h*N_w)
+		Nds[ty][tx] = N[index];
 	else
 		Nds[ty][tx] = 0.0;
+	
+	// Ensure that every element is loaded
 	__syncthreads();
 	for(int k = 0; k < TILE; ++k)
 		Pvalue += Mds[ty][k]*Nds[k][tx];
 		
-	// Copy the element we calculated back 
+	// Copy the element we calculated back if it is a valid element of P
 	if(row < P_h && col < P_w)
 		P[row*P_w + col] = Pvalue;
 }
