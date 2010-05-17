@@ -163,7 +163,17 @@ void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P)
 	cudaMemcpy(Pd, P.elements, Psize, cudaMemcpyHostToDevice);
 
 	// Setup the execution configuration
-	dim3 dimGrid(P.width/TILE, P.height/TILE);
+	int width, height;
+	if(P.width%TILE == 0)
+		width = P.width/TILE;
+	else
+		width = P.width/TILE + 1;
+	if(P.height%TILE == 0)
+		height = P.height/TILE;
+	else
+		height = P.height/TILE + 1;
+
+	dim3 dimGrid(width, height);
 	dim3 dimBlock(TILE, TILE);
  
     // Launch the device computation threads!

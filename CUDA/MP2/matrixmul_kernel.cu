@@ -54,7 +54,7 @@
 __global__ void MatrixMulKernel(float* M, float* N, float* P, int M_h, int M_w, int N_w)
 {
 	int N_h = M_w;
-	//int P_h = M_h;
+	int P_h = M_h;
 	int P_w = N_w;
 	 
 	__shared__ float Mds[TILE][TILE];
@@ -71,7 +71,7 @@ __global__ void MatrixMulKernel(float* M, float* N, float* P, int M_h, int M_w, 
 	
 	// For each tile
 	int i;
-	for(i = 0; i < M_w; i += TILE)
+	for(i = 0; i < M_w - TILE; i += TILE)
 	{
 		// Help load M and N tiles into shared memory
 		Mds[ty][tx] = M[row*M_w + (i+tx)];
@@ -86,7 +86,6 @@ __global__ void MatrixMulKernel(float* M, float* N, float* P, int M_h, int M_w, 
 	}
 	
 	// We still have to clean up the edges if the matrix isn't aligned to tile size
-	i = i - TILE;
 	if(row*M_w + (i+tx) < M_h*M_w)
 		Mds[ty][tx] = M[row*M_w + (i+tx)];
 	else
@@ -100,7 +99,8 @@ __global__ void MatrixMulKernel(float* M, float* N, float* P, int M_h, int M_w, 
 		Pvalue += Mds[ty][k]*Nds[k][tx];
 		
 	// Copy the element we calculated back 
-	P[row*P_w + col] = Pvalue;
+	if(row < P_h && col < P_w)
+		P[row*P_w + col] = Pvalue;
 }
 
 #endif // #ifndef _MATRIXMUL_KERNEL_H_
