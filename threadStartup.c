@@ -1,6 +1,8 @@
+// Compile with gcc -pthread -o threadStartup threadStartup.c
 #include <sys/time.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <sched.h>
 
 void *test_function();
 
@@ -9,8 +11,9 @@ main(int argc, char *argv[])
 	int num_threads = 100000;
 	float proc_GHz = 1.6;
 
+	// Array of thread IDs
 	pthread_t threads[num_threads]; 
-	
+
 	struct timeval t1, t2;
 	double elapsed;
 
