@@ -66,7 +66,7 @@ __global__ void ConvolutionKernel(float *M, float *N, float *P, int M_h, int M_w
 	{
 		// Load in the kernel. Must satisfy KERNEL_SIZE < BLOCK SIZE
 		if(tx < KERNEL_SIZE && ty < KERNEL_SIZE)
-			Mds[ty+off][tx+off] = M[ty*M_w + tx];
+			Mds[ty][tx] = M[ty*M_w + tx];
 		
 		// Load in the entire block to shared memory
 		Nds[ty][tx] = N[row*N_w + col];
@@ -101,7 +101,7 @@ __global__ void ConvolutionKernel(float *M, float *N, float *P, int M_h, int M_w
 		{
 			for(int n = n_b; n < n_e; n++)
 			{
-				Pvalue += M[m*M_w + n]*N[(m+row-2)*N_w + n+col-2];
+				Pvalue += Mds[m][n]*N[(m+row-2)*N_w + n+col-2];
 			}
 		}
 		P[row*P_w + col] = Pvalue;
