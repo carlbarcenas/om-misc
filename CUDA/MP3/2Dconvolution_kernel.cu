@@ -1,43 +1,11 @@
-/*
- * Copyright 1993-2006 NVIDIA Corporation.  All rights reserved.
- *
- * NOTICE TO USER:   
- *
- * This source code is subject to NVIDIA ownership rights under U.S. and 
- * international Copyright laws.  
- *
- * This software and the information contained herein is PROPRIETARY and 
- * CONFIDENTIAL to NVIDIA and is being provided under the terms and 
- * conditions of a Non-Disclosure Agreement.  Any reproduction or 
- * disclosure to any third party without the express written consent of 
- * NVIDIA is prohibited.     
- *
- * NVIDIA MAKES NO REPRESENTATION ABOUT THE SUITABILITY OF THIS SOURCE 
- * CODE FOR ANY PURPOSE.  IT IS PROVIDED "AS IS" WITHOUT EXPRESS OR 
- * IMPLIED WARRANTY OF ANY KIND.  NVIDIA DISCLAIMS ALL WARRANTIES WITH 
- * REGARD TO THIS SOURCE CODE, INCLUDING ALL IMPLIED WARRANTIES OF 
- * MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE.   
- * IN NO EVENT SHALL NVIDIA BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL, 
- * OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS 
- * OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE 
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE 
- * OR PERFORMANCE OF THIS SOURCE CODE.  
- *
- * U.S. Government End Users.  This source code is a "commercial item" as 
- * that term is defined at 48 C.F.R. 2.101 (OCT 1995), consisting  of 
- * "commercial computer software" and "commercial computer software 
- * documentation" as such terms are used in 48 C.F.R. 12.212 (SEPT 1995) 
- * and is provided to the U.S. Government only as a commercial end item.  
- * Consistent with 48 C.F.R.12.212 and 48 C.F.R. 227.7202-1 through 
- * 227.7202-4 (JUNE 1995), all U.S. Government End Users acquire the 
- * source code with only those rights set forth herein.
- */
-
 #ifndef _2DCONVOLUTION_KERNEL_H_
 #define _2DCONVOLUTION_KERNEL_H_
 
 #include <stdio.h>
 #include "2Dconvolution.h"
+
+#define N_SIZE BLOCK_SIZE+KERNEL_SIZE-1
+#define OFF KERNEL_SIZE/2
 
 // Matrix multiplication kernel thread specification
 __global__ void ConvolutionKernel(float *M, float *N, float *P, int M_h, int M_w, int N_h, int N_w)
@@ -49,7 +17,7 @@ __global__ void ConvolutionKernel(float *M, float *N, float *P, int M_h, int M_w
 	int P_w = N_w;
 
 	__shared__ float Mds[KERNEL_SIZE][KERNEL_SIZE];
-	__shared__ float Nds[BLOCK_SIZE+KERNEL_SIZE-1][BLOCK_SIZE+KERNEL_SIZE-1];
+	__shared__ float Nds[N_SIZE][N_SIZE];
 
 	int bx = blockIdx.x;
 	int by = blockIdx.y;
@@ -57,51 +25,67 @@ __global__ void ConvolutionKernel(float *M, float *N, float *P, int M_h, int M_w
 	int ty = threadIdx.y;
 	int row = by*BLOCK_SIZE + ty;
 	int col = bx*BLOCK_SIZE + tx;
-	int off = KERNEL_SIZE/2;
 
 	float Pvalue = 0.0;
+
+	// Load in the kernel using a tiled approach
+	for(int i = 0; i <= KERNEL_SIZE/BLOCK_SIZE; i++)
+	{
+		for(int j = 0; j <= KERNEL_SIZE/BLOCK_SIZE; j++)
+		{
+			// Check that we are loading an address inside the kernel and then load it into shared memory
+			if(tx+i*BLOCK_SIZE < KERNEL_SIZE &&
+			   ty+j*BLOCK_SIZE < KERNEL_SIZE)
+			{
+				Mds[ty+j*BLOCK_SIZE][tx+i*BLOCK_SIZE] = M[(ty+j*BLOCK_SIZE)*M_w + tx+i*BLOCK_SIZE];
+			}
+		}
+	}
+
+	// Load in KERNEL_SIZE/2 around the block using a tiled approach
+	for(int i = 1; i <= (KERNEL_SIZE/2)/BLOCK_SIZE; i++)
+	{
+		for(int j = 1; j <= (KERNEL_SIZE/2)/BLOCK_SIZE; j++)
+		{
+			int xds = tx+i*BLOCK_SIZE+OFF;
+			int yds = ty+j*BLOCK_SIZE+OFF;
+			// First check that the index we want is a valid element of N, then check that it is needed
+			// It will be needed if it fits into our Nds which is sized for BLOCK_SIZE and KERNEL_SIZE/2 on either side
+			if(xds < N_SIZE && yds < N_SIZE)
+			{
+				int x = col+i*BLOCK_SIZE;
+				int y = row+j*BLOCK_SIZE;
+				if(x < N_w && y < N_h)
+				{
+					// Load in the index
+					Nds[yds][xds] = N[y*N_w + x];
+				}
+				else
+				{
+					Nds[yds][xds] = 0.0;
+				}
+			}
+		}
+	}
 
 	// Don't do anything if we aren't operating on a valid pixel
 	if(row < P_h && col < P_w)
 	{
-		// Load in the kernel. Must satisfy KERNEL_SIZE < BLOCK SIZE
-		if(tx < KERNEL_SIZE && ty < KERNEL_SIZE)
-			Mds[ty][tx] = M[ty*M_w + tx];
-		
-		// Load in the entire block to shared memory
-		Nds[ty][tx] = N[row*N_w + col];
-		// Still need KERNEL_SIZE/2 on either side for convolution
-		if(tx == 0)
-		{
-			for(int i = 0; i <= off; i++)
-				Nds[ty+off][off-i] = N[row*N_w + (col-i)];
-		}
-		else if(tx == BLOCK_SIZE-1)
-		{
-			for(int i = 0; i <= off; i++)
-				Nds[ty+off][tx+off+i] = N[row*N_w + (col+i)];
-		}
-		if(ty == 0)
-		{
-			for(int i = 0; i <= off; i++)
-				Nds[off-i][tx+off] = N[(row-i)*N_w + col];
-		}
-		else if(ty == BLOCK_SIZE-1)
-		{
-			for(int i = 0; i <= off; i++)
-				Nds[ty+off+i][tx+off] = N[(row+i)*N_w + col];
-		}
+		// Load in entire block to shared memory
+		Nds[ty+OFF][tx+OFF] = N[row*N_w + col];
+		// Ensure all threads have access to the shared memory loads
 		__syncthreads();
 
-		unsigned int m_b = (row < 2)? 2 - row : 0;
-		unsigned int m_e = (row > (N_h - 3))? N_h - row + 2 : 5;
-		unsigned int n_b = (col < 2)? 2 - col : 0;
-		unsigned int n_e = (col > (N_w - 3))? N_w - col + 2 : 5;
+		unsigned int m_b = (row < OFF)? OFF - row : 0;
+		unsigned int m_e = (row >= (N_h - OFF))? N_h - row + OFF : KERNEL_SIZE;
+		unsigned int n_b = (col < OFF)? OFF - col : 0;
+		unsigned int n_e = (col >= (N_w - OFF))? N_w - col + OFF : KERNEL_SIZE;
 		for(int m = m_b; m < m_e; m++)
 		{
 			for(int n = n_b; n < n_e; n++)
 			{
-				Pvalue += Mds[m][n]*N[(m+row-2)*N_w + n+col-2];
+				Pvalue += Mds[m][n]*N[(m+row-OFF)*N_w + n+col-OFF];
+				//Pvalue += Mds[m][n]*Nds[m+ty][n+tx];
 			}
 		}
 		P[row*P_w + col] = Pvalue;

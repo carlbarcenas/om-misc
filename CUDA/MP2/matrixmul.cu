@@ -42,6 +42,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <sys/time.h>
 
 // includes, project
 #include <cutil.h>
@@ -108,14 +109,27 @@ int main(int argc, char** argv) {
 		}
 	}
 
+	struct timeval t1, t2;
+	double elapsed;
+
+	gettimeofday(&t1, NULL);
 	// M * N on the device
     MatrixMulOnDevice(M, N, P);
-    
+    gettimeofday(&t2, NULL);
+
+	elapsed = ((t2.tv_sec + t2.tv_usec/1000000.0) - (t1.tv_sec + t1.tv_usec/1000000.0));
+	printf("Elapsed Time: %f\n", elapsed);
 	printf("GPU computation complete\n");
+
+
+	gettimeofday(&t1, NULL);
     // compute the matrix multiplication on the CPU for comparison
     Matrix reference = AllocateMatrix(P.height, P.width, 0);
     computeGold(reference.elements, M.elements, N.elements, M.height, M.width, N.width);
+    gettimeofday(&t2, NULL);
         
+	elapsed = ((t2.tv_sec + t2.tv_usec/1000000.0) - (t1.tv_sec + t1.tv_usec/1000000.0));
+	printf("Elapsed Time: %f\n", elapsed);
 	printf("CPU computation complete\n");
     // in this case check if the result is equivalent to the expected soluion
     CUTBoolean res = cutComparefe(reference.elements, P.elements, 

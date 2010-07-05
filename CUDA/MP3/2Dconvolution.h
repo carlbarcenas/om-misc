@@ -37,7 +37,6 @@
 #define _MATRIXMUL_H_
 
 // Thread block size
-// KERNEL_SIZE < BLOCK_SIZE
 #define KERNEL_SIZE 5
 #define BLOCK_SIZE 16
 

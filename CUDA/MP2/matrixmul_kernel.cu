@@ -44,7 +44,7 @@
 #include "matrixmul.h"
 
 // Tile size has to be less than sqrt(512) == 23 since we can only have 512 threads in a block
-#define TILE 8
+#define TILE 16 
 
 ////////////////////////////////////////////////////////////////////////////////
 //! Simple test kernel for device functionality
