@@ -1,0 +1,28 @@
+${alignc}[--datatype=CT --centeredwidth=15]
+${offset 60}Currently:${offset 13}[--datatype=HT --imperial] ([--datatype=LT --imperial])
+${offset 90}High:${offset 13}[--datatype=HT --imperial --startday=0]
+
+
+
+${offset 20}[--datatype=DW --shortweekday --startday=1]
+${voffset -17}${offset 69}[--datatype=DW --shortweekday --startday=2]
+${voffset -17}${offset 118}[--datatype=DW --shortweekday --startday=3]
+${voffset -17}${offset 166}[--datatype=DW --shortweekday --startday=4]
+${voffset -17}${offset 216}[--datatype=DW --shortweekday --startday=5]
+${offset 20}[--datatype=HT --imperial --hideunits --startday=1]
+${voffset -17}${offset 70}[--datatype=HT --imperial --hideunits --startday=2]
+${voffset -17}${offset 120}[--datatype=HT --imperial --hideunits --startday=3]
+${voffset -17}${offset 170}[--datatype=HT --imperial --hideunits --startday=4]
+${voffset -17}${offset 220}[--datatype=HT --imperial --hideunits --startday=5]
+${offset 20}[--datatype=LT --imperial --hideunits --startday=1]
+${voffset -17}${offset 70}[--datatype=LT --imperial --hideunits --startday=2]
+${voffset -17}${offset 120}[--datatype=LT --imperial --hideunits --startday=3]
+${voffset -17}${offset 170}[--datatype=LT --imperial --hideunits --startday=4]
+${voffset -17}${offset 220}[--datatype=LT --imperial --hideunits --startday=5]
+
+${image [--datatype=WI] -p 5,840 -s 45x45}
+${image [--datatype=WI --startday=1] -p 5,890 -s 45x45}
+${image [--datatype=WI --startday=2] -p 55,890 -s 45x45}
+${image [--datatype=WI --startday=3] -p 105,890 -s 45x45}
+${image [--datatype=WI --startday=4] -p 155,890 -s 45x45}
+${image [--datatype=WI --startday=5] -p 205,890 -s 45x45}
