@@ -1,0 +1,1 @@
+Bits and pieces of code that I think might be worth saving
